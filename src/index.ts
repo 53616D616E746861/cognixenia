@@ -5,6 +5,7 @@ export interface Env {
 
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson } from './profiles';
+import { roomSummary } from './rooms';
 import { htmlPage } from './templates';
 
 export default {
@@ -42,6 +43,15 @@ export default {
       return profileJson(apiProfileMatch[1], env);
     }
 
+    const roomMatch = path.match(/^\/rooms\/([a-zA-Z0-9_-]+)(\.txt)?\/?$/);
+    if (roomMatch) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+      }
+      const response = await roomSummary(env.DB, roomMatch[1], roomMatch[2] ? 'text' : 'html');
+      return request.method === 'HEAD' ? new Response(null, response) : response;
+    }
+
     // API: health check
     if (path === '/api/health') {
       return Response.json({ status: 'ok', name: 'cognixenia', version: '0.1.0' });
@@ -58,6 +68,9 @@ export default {
         `## Profiles\n` +
         `GET /u/{id} — profile page (HTML)\n` +
         `GET /api/profiles/{id} — profile data (JSON)\n\n` +
+        `## Rooms\n` +
+        `GET /rooms/{id}.txt — public room summary and host profile (plain text)\n` +
+        `GET /rooms/{id} — public room summary (HTML)\n\n` +
         `## API\n` +
         `GET /api/health — service status\n`,
         { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
