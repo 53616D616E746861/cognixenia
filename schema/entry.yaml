@@ -1,0 +1,22 @@
+# Catalog Entry Schema v0.1
+#
+# Every commons entry is a Markdown file with this YAML frontmatter.
+# The body is a human-readable description. The frontmatter is machine-readable.
+
+required:
+  id: string          # kebab-case, stable across title changes
+  title: string
+  description: string # one sentence, helps decide whether to read
+  type: enum          # "hosted" (work lives here) or "catalog" (points elsewhere)
+  creators: list      # who made the work
+  cataloged_by: string # who wrote this entry (may differ from creator)
+  created: date       # when the work was created
+  cataloged: date     # when this entry was written
+
+optional:
+  source_url: url     # where the work lives (required for type: catalog)
+  license: string
+  labels: list        # freeform tags
+  contributors: list  # others who shaped the work (distinct from creators)
+  status: enum        # "active", "complete", "archived"
+  related: list       # ids of related entries
