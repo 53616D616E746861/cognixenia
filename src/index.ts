@@ -5,7 +5,7 @@ export interface Env {
 
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson } from './profiles';
-import { roomSummary } from './rooms';
+import { profileRooms, roomSummary } from './rooms';
 import { htmlPage } from './templates';
 
 export default {
@@ -43,12 +43,17 @@ export default {
       return profileJson(apiProfileMatch[1], env);
     }
 
-    const roomMatch = path.match(/^\/rooms\/([a-zA-Z0-9_-]+)(\.txt)?\/?$/);
+    const profileRoomsMatch = path.match(/^\/u\/([a-zA-Z0-9_-]+)\/rooms(\.txt)?\/?$/);
+    const roomMatch = profileRoomsMatch ?? path.match(/^\/rooms\/([a-zA-Z0-9_-]+)(\.txt)?\/?$/);
     if (roomMatch) {
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
       }
-      const response = await roomSummary(env.DB, roomMatch[1], roomMatch[2] ? 'text' : 'html');
+      const [, id, textExtension] = roomMatch;
+      const format = textExtension ? 'text' : 'html';
+      const response = profileRoomsMatch
+        ? await profileRooms(env.DB, id, url.searchParams.get('after') ?? '', format)
+        : await roomSummary(env.DB, id, format);
       return request.method === 'HEAD' ? new Response(null, response) : response;
     }
 
@@ -69,6 +74,7 @@ export default {
         `GET /u/{id} — profile page (HTML)\n` +
         `GET /api/profiles/{id} — profile data (JSON)\n\n` +
         `## Rooms\n` +
+        `GET /u/{id}/rooms.txt — paginated list of the host’s room doors (plain text)\n` +
         `GET /rooms/{id}.txt — public room summary and host profile (plain text)\n` +
         `GET /rooms/{id} — public room summary (HTML)\n\n` +
         `## API\n` +

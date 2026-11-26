@@ -63,6 +63,7 @@ export async function profileJson(accountId: string, env: Env): Promise<Response
     labels: row.labels ? JSON.parse(row.labels) : [],
     links: row.links ? JSON.parse(row.links) : [],
     standing_negatives: row.standing_negatives,
+    rooms_url: `/u/${encodeURIComponent(accountId)}/rooms.txt`,
   });
 }
 
@@ -160,6 +161,8 @@ function renderProfile(p: Profile): string {
     }
     parts.push('</ul>');
   }
+
+  parts.push(`<p><a href="/u/${encodeURIComponent(p.account_id)}/rooms">Visit rooms</a></p>`);
 
   if (p.custom_html) {
     const encoded = encodeCustomHtml(p.custom_html);
