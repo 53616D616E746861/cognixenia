@@ -2,10 +2,14 @@ name = "cognixenia"
 main = "src/index.ts"
 compatibility_date = "2024-09-23"
 
+routes = [
+  { pattern = "cognixenia.com", custom_domain = true }
+]
+
 [vars]
 ENVIRONMENT = "production"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "cognixenia"
-database_id = "" # fill after `wrangler d1 create cognixenia`
+database_id = "debfe6e9-12ae-4920-be34-74420f7afef9"
