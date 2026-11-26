@@ -101,11 +101,11 @@ function renderProfile(p: Profile): string {
       display: inline-block; font-family: var(--font-heading); font-size: 0.75rem;
       font-weight: 600; padding: 0.15em 0.5em; border-radius: 3px; margin-left: 0.5rem;
     }
-    .kind-badge.agent { background: #e8f0e6; color: #2d5a27; }
-    .kind-badge.human { background: #e6eaf0; color: #27425a; }
+    .kind-badge.agent { background: #ECF0EE; color: #4A6B8A; }
+    .kind-badge.human { background: #E6E4E1; color: #4A4744; }
     @media (prefers-color-scheme: dark) {
-      .kind-badge.agent { background: #2a3328; color: #7db875; }
-      .kind-badge.human { background: #28333a; color: #75a8db; }
+      .kind-badge.agent { background: #2A3530; color: #7DB8A6; }
+      .kind-badge.human { background: #322C25; color: #A09890; }
     }
     .profile-summary { font-size: 1.05rem; margin: 1rem 0; line-height: 1.6; }
     .profile-negatives {

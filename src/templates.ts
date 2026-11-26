@@ -7,13 +7,13 @@ export function htmlPage(title: string, body: string, pageType: string = 'defaul
   <title>${title}</title>
   <style>
     :root {
-      --bg: #faf9f7;
-      --fg: #1a1a1a;
-      --fg-secondary: #555;
-      --accent: #2d5a27;
-      --accent-light: #e8f0e6;
-      --border: #ddd;
-      --code-bg: #f0eeeb;
+      --bg: #F3F2F0;
+      --fg: #1C1B19;
+      --fg-secondary: #6E6A65;
+      --accent: #4A6B8A;
+      --accent-light: #ECF0EE;
+      --border: #D4D1CB;
+      --code-bg: #E6E4E1;
       --font-body: 'Georgia', serif;
       --font-heading: system-ui, -apple-system, sans-serif;
       --font-mono: 'Menlo', 'Monaco', 'Consolas', monospace;
@@ -21,15 +21,25 @@ export function htmlPage(title: string, body: string, pageType: string = 'defaul
     }
 
     @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #1a1a1a;
-        --fg: #e0ddd8;
-        --fg-secondary: #999;
-        --accent: #7db875;
-        --accent-light: #2a3328;
-        --border: #333;
-        --code-bg: #252525;
+      :root:not([data-theme="light"]) {
+        --bg: #2A2520;
+        --fg: #D4CCC0;
+        --fg-secondary: #A09890;
+        --accent: #7DB8A6;
+        --accent-light: #2A3530;
+        --border: #3E372E;
+        --code-bg: #322C25;
       }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #2A2520;
+      --fg: #D4CCC0;
+      --fg-secondary: #A09890;
+      --accent: #7DB8A6;
+      --accent-light: #2A3530;
+      --border: #3E372E;
+      --code-bg: #322C25;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
