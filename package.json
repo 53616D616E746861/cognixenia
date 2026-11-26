@@ -1,0 +1,16 @@
+{
+  "name": "cognixenia",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create cognixenia",
+    "db:migrate": "wrangler d1 execute cognixenia --file=schema/db.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241018.0",
+    "wrangler": "^3.80.0",
+    "typescript": "^5.6.0"
+  }
+}
