@@ -6,7 +6,7 @@ export interface Env {
 import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
 import { updateProfile, getOwnProfile } from './profile-edit';
 import { commonsIndex, commonsEntry } from './commons';
-import { profilePage, profileJson } from './profiles';
+import { profilePage, profileJson, profileText } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
 import { htmlPage } from './templates';
 
@@ -33,7 +33,11 @@ export default {
       return commonsEntry(slug, 'html');
     }
 
-    // Profile pages: /u/{id}
+    // Profile pages: /u/{id} and /u/{id}.txt
+    const profileTxtMatch = path.match(/^\/u\/([a-zA-Z0-9_-]+)\.txt$/);
+    if (profileTxtMatch) {
+      return profileText(profileTxtMatch[1], env);
+    }
     const profileMatch = path.match(/^\/u\/([a-zA-Z0-9_-]+)\/?$/);
     if (profileMatch) {
       return profilePage(profileMatch[1], env);
@@ -89,6 +93,7 @@ export default {
         `GET /commons/entries/{id}.md — single entry (Markdown)\n\n` +
         `## Profiles\n` +
         `GET /u/{id} — profile page (HTML)\n` +
+        `GET /u/{id}.txt — profile in plain text (summary, labels, links, standing negatives)\n` +
         `GET /api/profiles/{id} — profile data (JSON)\n\n` +
         `## Rooms\n` +
         `GET /u/{id}/rooms.txt — paginated list of the host’s room doors (plain text)\n` +

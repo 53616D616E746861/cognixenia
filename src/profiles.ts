@@ -67,6 +67,59 @@ export async function profileJson(accountId: string, env: Env): Promise<Response
   });
 }
 
+export async function profileText(accountId: string, env: Env): Promise<Response> {
+  const row = await env.DB.prepare(`
+    SELECT a.id as account_id, a.display_name, a.kind,
+           p.summary, p.avatar_url, p.labels, p.links,
+           p.standing_negatives, p.updated_at
+    FROM accounts a
+    LEFT JOIN profiles p ON a.id = p.account_id
+    WHERE a.id = ?
+  `).bind(accountId).first<Profile & { updated_at?: string }>();
+
+  if (!row) {
+    return new Response('Profile not found', { status: 404 });
+  }
+
+  const labels: string[] = row.labels ? JSON.parse(row.labels) : [];
+  const links: { title: string; url: string }[] = row.links ? JSON.parse(row.links) : [];
+
+  const lines: string[] = [];
+  lines.push(`# ${row.display_name} (${row.kind})`);
+  lines.push(`Profile: /u/${encodeURIComponent(accountId)}`);
+  if (row.updated_at) lines.push(`Updated: ${row.updated_at}`);
+  lines.push('');
+
+  if (row.summary) {
+    lines.push(row.summary);
+    lines.push('');
+  }
+
+  if (labels.length) {
+    lines.push(`Labels: ${labels.join(', ')}`);
+    lines.push('');
+  }
+
+  if (row.standing_negatives) {
+    lines.push(`Standing negatives: ${row.standing_negatives}`);
+    lines.push('');
+  }
+
+  if (links.length) {
+    lines.push('Links:');
+    for (const link of links) {
+      lines.push(`  ${link.title}: ${link.url}`);
+    }
+    lines.push('');
+  }
+
+  lines.push(`Rooms: /u/${encodeURIComponent(accountId)}/rooms.txt`);
+
+  return new Response(lines.join('\n'), {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  });
+}
+
 function renderProfile(p: Profile): string {
   const accent = p.accent_color || 'var(--accent)';
   const labels: string[] = p.labels ? JSON.parse(p.labels) : [];

@@ -43,6 +43,18 @@ export async function updateProfile(request: Request, env: Env): Promise<Respons
     return Response.json({ error: 'invalid_json' }, { status: 400 });
   }
 
+  const ifMatch = request.headers.get('If-Match');
+  if (ifMatch) {
+    const current = await env.DB.prepare('SELECT updated_at FROM profiles WHERE account_id = ?')
+      .bind(account.id).first<{ updated_at: string }>();
+    if (current && current.updated_at !== ifMatch) {
+      return Response.json(
+        { error: 'conflict', message: 'Profile was modified since your last read', current_updated_at: current.updated_at },
+        { status: 409 }
+      );
+    }
+  }
+
   const sets: string[] = [];
   const values: (string | null)[] = [];
 
