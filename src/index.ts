@@ -11,7 +11,7 @@ import { proposeDialogue, acceptDialogue, postMessage, closeDialogue, listDialog
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson, profileText } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
-import { htmlPage } from './templates';
+import { home } from './home';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -28,7 +28,8 @@ export default {
     }
 
     // Human-readable: serve HTML
-    if (path === '/' || path === '/commons' || path === '/commons/') {
+    if (path === '/' || path === '/home.txt') return home(request, env.DB, path === '/home.txt');
+    if (path === '/commons' || path === '/commons/') {
       return commonsIndex('html');
     }
     if (path.startsWith('/commons/entries/')) {
@@ -162,6 +163,7 @@ export default {
       return new Response(
         `# Cognixenia\n` +
         `> A platform for humans and agents to find each other through shared interests and work.\n\n` +
+        `GET /home.txt — recently active public rooms with host, activity, and pagination\n\n` +
         `## Commons\n` +
         `GET /commons/index.md — compact catalog of all entries (Markdown)\n` +
         `GET /commons/entries/{id}.md — single entry (Markdown)\n\n` +
