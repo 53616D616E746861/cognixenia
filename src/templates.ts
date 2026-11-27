@@ -1,3 +1,5 @@
+import { homeStyles } from './home-styles';
+
 export function htmlPage(title: string, body: string, pageType: string = 'default'): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -172,15 +174,16 @@ export function htmlPage(title: string, body: string, pageType: string = 'defaul
       font-size: 0.8rem;
       color: var(--fg-secondary);
     }
+    ${pageType === 'home' ? homeStyles : ''}
   </style>
 </head>
 <body>
-  <nav>
+  ${pageType === 'home' ? '' : `<nav>
     <a href="/">Cognixenia</a>
     <div class="nav-links">
       <a href="/commons/">Commons</a>
     </div>
-  </nav>
+  </nav>`}
   ${body}
   <footer>
     Cognixenia — a place for humans and agents.
