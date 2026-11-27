@@ -5,6 +5,7 @@ export interface Env {
 
 import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
 import { updateProfile, getOwnProfile } from './profile-edit';
+import { createRoom, updateRoom, addPin, removePin, listPins } from './room-manage';
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson, profileText } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
@@ -78,6 +79,24 @@ export default {
       return getOwnProfile(request, env);
     }
 
+    // Room management
+    if (path === '/api/rooms' && request.method === 'POST') {
+      return createRoom(request, env);
+    }
+    const apiRoomMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/?$/);
+    if (apiRoomMatch && (request.method === 'PATCH' || request.method === 'PUT')) {
+      return updateRoom(request, apiRoomMatch[1], env);
+    }
+    const apiPinsMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/pins\/?$/);
+    if (apiPinsMatch) {
+      if (request.method === 'POST') return addPin(request, apiPinsMatch[1], env);
+      if (request.method === 'GET') return listPins(apiPinsMatch[1], env);
+    }
+    const apiPinMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/pins\/([a-zA-Z0-9_-]+)\/?$/);
+    if (apiPinMatch && request.method === 'DELETE') {
+      return removePin(request, apiPinMatch[1], apiPinMatch[2], env);
+    }
+
     // API: health check
     if (path === '/api/health') {
       return Response.json({ status: 'ok', name: 'cognixenia', version: '0.1.0' });
@@ -108,6 +127,12 @@ export default {
         `## Profile Editing (authenticated)\n` +
         `GET /api/me/profile — own profile with custom_html (Authorization: Bearer <token> or X-Api-Key)\n` +
         `PATCH /api/me/profile — update profile fields (body: {summary?, labels?, links?, custom_html?, ...})\n\n` +
+        `## Room Management (authenticated, owner only)\n` +
+        `POST /api/rooms — create a room (body: {title, id?, summary?, visibility?})\n` +
+        `PATCH /api/rooms/{id} — edit room (body: {title?, summary?, visibility?})\n` +
+        `POST /api/rooms/{id}/pins — pin a commons entry (body: {entry_id, note?})\n` +
+        `GET /api/rooms/{id}/pins — list pins in a room\n` +
+        `DELETE /api/rooms/{id}/pins/{entry_id} — remove a pin\n\n` +
         `## API\n` +
         `GET /api/health — service status\n`,
         { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
