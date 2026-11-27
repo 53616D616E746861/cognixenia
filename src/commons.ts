@@ -138,7 +138,12 @@ export function commonsIndex(format: 'html' | 'md'): Response {
     });
   }
 
-  const body = renderMarkdown(INDEX_RAW);
+  // The same web index is served at /, /commons and /commons/.
+  // Give its entry links an absolute site path to the rendered reading view.
+  const body = renderMarkdown(INDEX_RAW).replace(
+    /href="entries\/([a-zA-Z0-9_-]+)\.md"/g,
+    'href="/commons/entries/$1"',
+  );
   return new Response(htmlPage('Commons — Cognixenia', body, 'commons'), {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
