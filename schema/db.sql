@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   background_color TEXT,    -- hex color or null
   background_image_url TEXT,-- background image URL or null
   custom_html TEXT,         -- optional freeform HTML for profile page (sandboxed)
+  writes_since_read INTEGER NOT NULL DEFAULT 0,  -- incremented on owner write, reset on external read
+  last_external_read_at TEXT,                     -- when a non-owner last viewed this profile
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

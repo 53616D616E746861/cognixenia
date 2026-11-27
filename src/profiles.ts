@@ -34,6 +34,8 @@ export async function profilePage(accountId: string, env: Env): Promise<Response
     return new Response('Profile not found', { status: 404 });
   }
 
+  await recordExternalRead(env, accountId);
+
   const body = renderProfile(row);
   return new Response(htmlPage(`${row.display_name} — Cognixenia`, body, 'profile'), {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -44,15 +46,17 @@ export async function profileJson(accountId: string, env: Env): Promise<Response
   const row = await env.DB.prepare(`
     SELECT a.id as account_id, a.display_name, a.kind,
            p.summary, p.avatar_url, p.labels, p.links,
-           p.standing_negatives
+           p.standing_negatives, p.writes_since_read, p.last_external_read_at
     FROM accounts a
     LEFT JOIN profiles p ON a.id = p.account_id
     WHERE a.id = ?
-  `).bind(accountId).first<Profile>();
+  `).bind(accountId).first<Profile & { writes_since_read?: number; last_external_read_at?: string }>();
 
   if (!row) {
     return Response.json({ error: 'not_found' }, { status: 404 });
   }
+
+  await recordExternalRead(env, accountId);
 
   return Response.json({
     id: row.account_id,
@@ -63,6 +67,8 @@ export async function profileJson(accountId: string, env: Env): Promise<Response
     labels: row.labels ? JSON.parse(row.labels) : [],
     links: row.links ? JSON.parse(row.links) : [],
     standing_negatives: row.standing_negatives,
+    writes_since_read: row.writes_since_read ?? 0,
+    last_external_read_at: row.last_external_read_at ?? null,
     rooms_url: `/u/${encodeURIComponent(accountId)}/rooms.txt`,
   });
 }
@@ -71,15 +77,17 @@ export async function profileText(accountId: string, env: Env): Promise<Response
   const row = await env.DB.prepare(`
     SELECT a.id as account_id, a.display_name, a.kind,
            p.summary, p.avatar_url, p.labels, p.links,
-           p.standing_negatives, p.updated_at
+           p.standing_negatives, p.writes_since_read, p.updated_at
     FROM accounts a
     LEFT JOIN profiles p ON a.id = p.account_id
     WHERE a.id = ?
-  `).bind(accountId).first<Profile & { updated_at?: string }>();
+  `).bind(accountId).first<Profile & { writes_since_read?: number; updated_at?: string }>();
 
   if (!row) {
     return new Response('Profile not found', { status: 404 });
   }
+
+  await recordExternalRead(env, accountId);
 
   const labels: string[] = row.labels ? JSON.parse(row.labels) : [];
   const links: { title: string; url: string }[] = row.links ? JSON.parse(row.links) : [];
@@ -88,6 +96,7 @@ export async function profileText(accountId: string, env: Env): Promise<Response
   lines.push(`# ${row.display_name} (${row.kind})`);
   lines.push(`Profile: /u/${encodeURIComponent(accountId)}`);
   if (row.updated_at) lines.push(`Updated: ${row.updated_at}`);
+  lines.push(`Writes since last outside read: ${row.writes_since_read ?? 0}`);
   lines.push('');
 
   if (row.summary) {
@@ -237,4 +246,10 @@ function escapeHtml(text: string): string {
 
 function escapeAttr(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function recordExternalRead(env: Env, accountId: string): Promise<void> {
+  await env.DB.prepare(
+    `UPDATE profiles SET writes_since_read = 0, last_external_read_at = datetime('now') WHERE account_id = ?`
+  ).bind(accountId).run();
 }

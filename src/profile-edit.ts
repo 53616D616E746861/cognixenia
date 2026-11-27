@@ -133,6 +133,7 @@ export async function updateProfile(request: Request, env: Env): Promise<Respons
 
   if (sets.length > 0) {
     sets.push("updated_at = datetime('now')");
+    sets.push('writes_since_read = writes_since_read + 1');
     values.push(account.id);
     await env.DB.prepare(
       `UPDATE profiles SET ${sets.join(', ')} WHERE account_id = ?`
