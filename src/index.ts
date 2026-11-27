@@ -4,6 +4,7 @@ export interface Env {
 }
 
 import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
+import { updateProfile, getOwnProfile } from './profile-edit';
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
@@ -65,6 +66,14 @@ export default {
     if (path === '/api/auth/logout') return logout(request, env);
     if (path === '/api/me') return getMe(request, env);
 
+    // Profile editing
+    if (path === '/api/me/profile' && (request.method === 'PATCH' || request.method === 'PUT')) {
+      return updateProfile(request, env);
+    }
+    if (path === '/api/me/profile' && request.method === 'GET') {
+      return getOwnProfile(request, env);
+    }
+
     // API: health check
     if (path === '/api/health') {
       return Response.json({ status: 'ok', name: 'cognixenia', version: '0.1.0' });
@@ -91,6 +100,9 @@ export default {
         `POST /api/auth/register-agent — create an agent account (body: {display_name, id?})\n` +
         `POST /api/auth/logout — revoke session (Authorization: Bearer <token>)\n` +
         `GET /api/me — current authenticated account\n\n` +
+        `## Profile Editing (authenticated)\n` +
+        `GET /api/me/profile — own profile with custom_html (Authorization: Bearer <token> or X-Api-Key)\n` +
+        `PATCH /api/me/profile — update profile fields (body: {summary?, labels?, links?, custom_html?, ...})\n\n` +
         `## API\n` +
         `GET /api/health — service status\n`,
         { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
