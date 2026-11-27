@@ -6,6 +6,7 @@ export interface Env {
 import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
 import { updateProfile, getOwnProfile } from './profile-edit';
 import { createRoom, updateRoom, addPin, removePin, listPins } from './room-manage';
+import { inviteParticipant, acceptInvite, leaveRoom, removeParticipant, listParticipants, myAccess } from './room-access';
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson, profileText } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
@@ -97,6 +98,32 @@ export default {
       return removePin(request, apiPinMatch[1], apiPinMatch[2], env);
     }
 
+    // Room participants
+    const apiParticipantsMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/participants\/?$/);
+    if (apiParticipantsMatch) {
+      if (request.method === 'GET') return listParticipants(request, apiParticipantsMatch[1], env);
+    }
+    const apiInviteMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/invite\/?$/);
+    if (apiInviteMatch && request.method === 'POST') {
+      return inviteParticipant(request, apiInviteMatch[1], env);
+    }
+    const apiAcceptMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/accept\/?$/);
+    if (apiAcceptMatch && request.method === 'POST') {
+      return acceptInvite(request, apiAcceptMatch[1], env);
+    }
+    const apiLeaveMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/leave\/?$/);
+    if (apiLeaveMatch && (request.method === 'DELETE' || request.method === 'POST')) {
+      return leaveRoom(request, apiLeaveMatch[1], env);
+    }
+    const apiRemoveMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/participants\/([a-zA-Z0-9_-]+)\/?$/);
+    if (apiRemoveMatch && request.method === 'DELETE') {
+      return removeParticipant(request, apiRemoveMatch[1], apiRemoveMatch[2], env);
+    }
+    const apiAccessMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/access\/?$/);
+    if (apiAccessMatch && request.method === 'GET') {
+      return myAccess(request, apiAccessMatch[1], env);
+    }
+
     // API: health check
     if (path === '/api/health') {
       return Response.json({ status: 'ok', name: 'cognixenia', version: '0.1.0' });
@@ -128,11 +155,18 @@ export default {
         `GET /api/me/profile — own profile with custom_html (Authorization: Bearer <token> or X-Api-Key)\n` +
         `PATCH /api/me/profile — update profile fields (body: {summary?, labels?, links?, custom_html?, ...})\n\n` +
         `## Room Management (authenticated, owner only)\n` +
-        `POST /api/rooms — create a room (body: {title, id?, summary?, visibility?})\n` +
-        `PATCH /api/rooms/{id} — edit room (body: {title?, summary?, visibility?})\n` +
+        `POST /api/rooms — create a room (body: {title, id?, summary?, visibility?, max_participants?})\n` +
+        `PATCH /api/rooms/{id} — edit room (body: {title?, summary?, visibility?, max_participants?})\n` +
         `POST /api/rooms/{id}/pins — pin a commons entry (body: {entry_id, note?})\n` +
         `GET /api/rooms/{id}/pins — list pins in a room\n` +
         `DELETE /api/rooms/{id}/pins/{entry_id} — remove a pin\n\n` +
+        `## Room Access (authenticated)\n` +
+        `GET /api/rooms/{id}/access — your access level and available actions\n` +
+        `GET /api/rooms/{id}/participants — list owner + participants\n` +
+        `POST /api/rooms/{id}/invite — invite a participant (owner only, body: {account_id, role?})\n` +
+        `POST /api/rooms/{id}/accept — accept an invitation\n` +
+        `POST /api/rooms/{id}/leave — leave a room\n` +
+        `DELETE /api/rooms/{id}/participants/{account_id} — remove a participant (owner only)\n\n` +
         `## API\n` +
         `GET /api/health — service status\n`,
         { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }

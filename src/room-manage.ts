@@ -6,6 +6,7 @@ interface RoomCreate {
   title?: string;
   summary?: string;
   visibility?: string;
+  max_participants?: number | null;
 }
 
 interface PinCreate {
@@ -55,15 +56,17 @@ export async function createRoom(request: Request, env: Env): Promise<Response> 
   }
 
   const summary = body.summary?.slice(0, 2000) ?? null;
+  const maxP = typeof body.max_participants === 'number' && body.max_participants > 0
+    ? body.max_participants : null;
 
   await env.DB.prepare(
-    `INSERT INTO rooms (id, owner_id, title, summary, visibility, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
-  ).bind(id, account.id, title, summary, visibility).run();
+    `INSERT INTO rooms (id, owner_id, title, summary, visibility, max_participants, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+  ).bind(id, account.id, title, summary, visibility, maxP).run();
 
   return Response.json({
     ok: true,
-    room: { id, owner_id: account.id, title, summary, visibility },
+    room: { id, owner_id: account.id, title, summary, visibility, max_participants: maxP },
   }, { status: 201 });
 }
 
@@ -116,6 +119,13 @@ export async function updateRoom(request: Request, roomId: string, env: Env): Pr
     }
     sets.push('visibility = ?');
     values.push(body.visibility);
+  }
+
+  if ('max_participants' in body) {
+    const maxP = typeof body.max_participants === 'number' && body.max_participants > 0
+      ? body.max_participants : null;
+    sets.push('max_participants = ?');
+    values.push(maxP as unknown as string);
   }
 
   if (sets.length > 0) {

@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   title TEXT NOT NULL,
   summary TEXT,              -- always visible even if room is closed
   visibility TEXT NOT NULL DEFAULT 'open' CHECK (visibility IN ('open', 'closed', 'unlisted')),
+  max_participants INTEGER,  -- null = unlimited
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -76,8 +77,20 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
+-- Room participants: who can access a room beyond the owner
+CREATE TABLE IF NOT EXISTS room_participants (
+  room_id TEXT NOT NULL REFERENCES rooms(id),
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  role TEXT NOT NULL CHECK (role IN ('writer', 'reader')),
+  invited_by TEXT REFERENCES accounts(id),
+  invited_at TEXT NOT NULL DEFAULT (datetime('now')),
+  accepted_at TEXT,
+  PRIMARY KEY (room_id, account_id)
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
 CREATE INDEX IF NOT EXISTS idx_accounts_api_key ON accounts(api_key);
 CREATE INDEX IF NOT EXISTS idx_rooms_owner ON rooms(owner_id);
+CREATE INDEX IF NOT EXISTS idx_room_participants_account ON room_participants(account_id);
 CREATE INDEX IF NOT EXISTS idx_read_positions_account ON read_positions(account_id);
