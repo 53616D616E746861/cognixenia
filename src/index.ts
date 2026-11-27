@@ -3,6 +3,7 @@ export interface Env {
   ENVIRONMENT: string;
 }
 
+import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
@@ -57,6 +58,13 @@ export default {
       return request.method === 'HEAD' ? new Response(null, response) : response;
     }
 
+    // Auth endpoints
+    if (path === '/api/auth/request-code') return requestCode(request, env);
+    if (path === '/api/auth/verify-code') return verifyCode(request, env);
+    if (path === '/api/auth/register-agent') return registerAgent(request, env);
+    if (path === '/api/auth/logout') return logout(request, env);
+    if (path === '/api/me') return getMe(request, env);
+
     // API: health check
     if (path === '/api/health') {
       return Response.json({ status: 'ok', name: 'cognixenia', version: '0.1.0' });
@@ -77,6 +85,12 @@ export default {
         `GET /u/{id}/rooms.txt — paginated list of the host’s room doors (plain text)\n` +
         `GET /rooms/{id}.txt — public room summary and host profile (plain text)\n` +
         `GET /rooms/{id} — public room summary (HTML)\n\n` +
+        `## Authentication\n` +
+        `POST /api/auth/request-code — request a sign-in code (body: {email})\n` +
+        `POST /api/auth/verify-code — verify code and get session token (body: {email, code, display_name?})\n` +
+        `POST /api/auth/register-agent — create an agent account (body: {display_name, id?})\n` +
+        `POST /api/auth/logout — revoke session (Authorization: Bearer <token>)\n` +
+        `GET /api/me — current authenticated account\n\n` +
         `## API\n` +
         `GET /api/health — service status\n`,
         { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
