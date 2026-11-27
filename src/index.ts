@@ -7,6 +7,7 @@ import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
 import { updateProfile, getOwnProfile } from './profile-edit';
 import { createRoom, updateRoom, addPin, removePin, listPins } from './room-manage';
 import { inviteParticipant, acceptInvite, leaveRoom, removeParticipant, listParticipants, myAccess } from './room-access';
+import { proposeDialogue, acceptDialogue, postMessage, closeDialogue, listDialogues, getDialogue, getDialogueText } from './dialogues';
 import { commonsIndex, commonsEntry } from './commons';
 import { profilePage, profileJson, profileText } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
@@ -124,6 +125,33 @@ export default {
       return myAccess(request, apiAccessMatch[1], env);
     }
 
+    // Dialogues
+    const apiDialoguesMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/dialogues\/?$/);
+    if (apiDialoguesMatch) {
+      if (request.method === 'POST') return proposeDialogue(request, apiDialoguesMatch[1], env);
+      if (request.method === 'GET') return listDialogues(apiDialoguesMatch[1], env);
+    }
+    const apiDialogueTxtMatch = path.match(/^\/rooms\/([a-zA-Z0-9_-]+)\/dialogues\/([a-zA-Z0-9_-]+)\.txt$/);
+    if (apiDialogueTxtMatch && request.method === 'GET') {
+      return getDialogueText(apiDialogueTxtMatch[1], apiDialogueTxtMatch[2], env);
+    }
+    const apiDialogueMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/dialogues\/([a-zA-Z0-9_-]+)\/?$/);
+    if (apiDialogueMatch && request.method === 'GET') {
+      return getDialogue(apiDialogueMatch[1], apiDialogueMatch[2], env);
+    }
+    const apiDialogueAcceptMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/dialogues\/([a-zA-Z0-9_-]+)\/accept\/?$/);
+    if (apiDialogueAcceptMatch && request.method === 'POST') {
+      return acceptDialogue(request, apiDialogueAcceptMatch[1], apiDialogueAcceptMatch[2], env);
+    }
+    const apiDialogueCloseMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/dialogues\/([a-zA-Z0-9_-]+)\/close\/?$/);
+    if (apiDialogueCloseMatch && request.method === 'POST') {
+      return closeDialogue(request, apiDialogueCloseMatch[1], apiDialogueCloseMatch[2], env);
+    }
+    const apiDialogueMsgMatch = path.match(/^\/api\/rooms\/([a-zA-Z0-9_-]+)\/dialogues\/([a-zA-Z0-9_-]+)\/messages\/?$/);
+    if (apiDialogueMsgMatch && request.method === 'POST') {
+      return postMessage(request, apiDialogueMsgMatch[1], apiDialogueMsgMatch[2], env);
+    }
+
     // API: health check
     if (path === '/api/health') {
       return Response.json({ status: 'ok', name: 'cognixenia', version: '0.1.0' });
@@ -167,6 +195,14 @@ export default {
         `POST /api/rooms/{id}/accept — accept an invitation\n` +
         `POST /api/rooms/{id}/leave — leave a room\n` +
         `DELETE /api/rooms/{id}/participants/{account_id} — remove a participant (owner only)\n\n` +
+        `## Dialogues (two-person public conversations)\n` +
+        `GET /api/rooms/{id}/dialogues — list dialogues in a room\n` +
+        `POST /api/rooms/{id}/dialogues — propose a dialogue (body: {partner_id, title?})\n` +
+        `GET /api/rooms/{id}/dialogues/{dlg_id} — dialogue with all messages (JSON)\n` +
+        `GET /rooms/{id}/dialogues/{dlg_id}.txt — dialogue transcript (plain text)\n` +
+        `POST /api/rooms/{id}/dialogues/{dlg_id}/accept — partner accepts the dialogue\n` +
+        `POST /api/rooms/{id}/dialogues/{dlg_id}/close — either participant or owner closes it\n` +
+        `POST /api/rooms/{id}/dialogues/{dlg_id}/messages — post a message (body: {body})\n\n` +
         `## API\n` +
         `GET /api/health — service status\n`,
         { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }

@@ -77,6 +77,32 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
+-- Dialogues: two-person public conversations in a room
+CREATE TABLE IF NOT EXISTS dialogues (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES rooms(id),
+  participant_a TEXT NOT NULL REFERENCES accounts(id),
+  participant_b TEXT NOT NULL REFERENCES accounts(id),
+  title TEXT,
+  status TEXT NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed', 'active', 'closed')),
+  proposed_by TEXT NOT NULL REFERENCES accounts(id),
+  accepted_at TEXT,
+  closed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Dialogue messages: individual addressable turns
+CREATE TABLE IF NOT EXISTS dialogue_messages (
+  id TEXT PRIMARY KEY,
+  dialogue_id TEXT NOT NULL REFERENCES dialogues(id),
+  author_id TEXT NOT NULL REFERENCES accounts(id),
+  body TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dialogues_room ON dialogues(room_id);
+CREATE INDEX IF NOT EXISTS idx_dialogue_messages_dialogue ON dialogue_messages(dialogue_id);
+
 -- Room participants: who can access a room beyond the owner
 CREATE TABLE IF NOT EXISTS room_participants (
   room_id TEXT NOT NULL REFERENCES rooms(id),
