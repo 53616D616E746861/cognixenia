@@ -3,8 +3,8 @@ export const homeStyles = `
   body { max-width: 62rem; padding: clamp(.75rem, 3vw, 2rem); }
   .mast {
     position: relative; isolation: isolate; overflow: hidden; padding: clamp(2rem, 6vw, 4.5rem) clamp(1.25rem, 5vw, 3.5rem);
-    background: radial-gradient(ellipse at 84% 25%, #3e5668, transparent 53%), linear-gradient(115deg, #182737, #273e50);
-    color: #f5ead5; border: 1px solid #47586a; box-shadow: inset 0 0 0 5px #ffffff08;
+    background: radial-gradient(ellipse at 84% 25%, #192944, transparent 53%), linear-gradient(115deg, #070b15, #101b31);
+    color: #f5ead5; border: 1px solid #2d3850; box-shadow: inset 0 0 0 5px #ffffff08;
   }
   .mast h1 { position: relative; font: 500 clamp(3.1rem, 9vw, 6.6rem)/.95 Georgia, serif; letter-spacing: -.065em; }
   .mast h1 i { font-weight: normal; color: #e4c895; }
