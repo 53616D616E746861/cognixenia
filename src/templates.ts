@@ -1,3 +1,4 @@
+import { escapeHtml } from './markdown';
 import { homeStyles } from './home-styles';
 
 export function htmlPage(title: string, body: string, pageType: string = 'default'): string {
@@ -6,7 +7,7 @@ export function htmlPage(title: string, body: string, pageType: string = 'defaul
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${title}</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     :root {
       --bg: #F3F2F0;
