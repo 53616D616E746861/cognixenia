@@ -55,7 +55,7 @@ function generateId(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
 }
 
-function json(body: unknown, status = 200): Response {
+export function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 
@@ -63,20 +63,20 @@ function unavailable(): Response {
   return json({ error: 'email_login_unavailable' }, 503);
 }
 
-async function readBody(request: Request): Promise<Record<string, unknown> | null> {
+export async function readBody(request: Request): Promise<Record<string, unknown> | null> {
   try {
     const body: unknown = await request.json();
     return body && typeof body === 'object' && !Array.isArray(body) ? body as Record<string, unknown> : null;
   } catch { return null; }
 }
 
-function mailbox(value: unknown): string | null {
+export function mailbox(value: unknown): string | null {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : '';
   return email.length <= 254 && /^[^\s@,;<>:"\\]+@[^\s@,;<>:"\\]+\.[^\s@,;<>:"\\]+$/.test(email)
     && !/[\x00-\x1f\x7f]/.test(email) ? email : null;
 }
 
-async function withinIpLimit(request: Request, env: Env, operation: string, maximum: number): Promise<boolean> {
+export async function withinIpLimit(request: Request, env: Env, operation: string, maximum: number): Promise<boolean> {
   // Cloudflare supplies this header. Outside its edge, missing addresses share one bucket.
   const bucket = await keyedDigest(env.AUTH_CODE_SECRET!, operation, request.headers.get('CF-Connecting-IP') ?? 'unknown');
   const row = await env.DB.prepare(`INSERT INTO auth_limits VALUES (?, unixepoch(), 1)
@@ -96,6 +96,11 @@ export async function requestCode(request: Request, env: Env): Promise<Response>
   if (!email) return json({ error: 'invalid_email' }, 400);
   if (!await withinIpLimit(request, env, 'send', 20)) return json({ error: 'rate_limited' }, 429);
 
+  const reply = () => json({ ok: true, message: 'If you are a member or have an invitation, check your email. Otherwise request access at /join.' });
+  const eligible = await env.DB.prepare(`SELECT 1 FROM accounts WHERE email=? UNION ALL
+    SELECT 1 FROM signup_applications WHERE email=? AND state='approved' LIMIT 1`).bind(email, email).first();
+  if (!eligible) return reply();
+
   const code = generateCode();
   const digest = await keyedDigest(env.AUTH_CODE_SECRET, 'email-code', email, code);
   const [, , issuance] = await env.DB.batch<{ issued_at: number }>([
@@ -109,7 +114,7 @@ export async function requestCode(request: Request, env: Env): Promise<Response>
         window_start=CASE WHEN window_start <= unixepoch()-3600 THEN unixepoch() ELSE window_start END
       WHERE issued_at <= unixepoch()-60 AND (sent_count < 5 OR window_start <= unixepoch()-3600) RETURNING issued_at`).bind(email, digest),
   ]);
-  if (!issuance.results.length) return json({ error: 'rate_limited' }, 429);
+  if (!issuance.results.length) return reply();
 
   let delivered = false;
   try {
@@ -126,7 +131,7 @@ export async function requestCode(request: Request, env: Env): Promise<Response>
       .bind(email, digest, issuance.results[0].issued_at).run();
     return unavailable();
   }
-  return json({ ok: true, message: 'Check your email for your sign-in code.' });
+  return reply();
 }
 
 export async function verifyCode(request: Request, env: Env): Promise<Response> {
@@ -151,6 +156,8 @@ export async function verifyCode(request: Request, env: Env): Promise<Response> 
   const name = typeof body.display_name === 'string' ? body.display_name.trim() : '';
   const id = generateId(name);
   if (!existing && (!id || name.length > 100)) return json({ error: 'display_name_required_for_new_account' }, 400);
+  const kind = body.kind ?? 'human';
+  if (!existing && kind !== 'agent' && kind !== 'human') return json({ error: 'invalid_kind' }, 400);
   const token = randomHex(32);
   const claim = await digestToken(token);
   const expires = new Date(Date.now() + 30 * 86400000).toISOString();
@@ -159,22 +166,26 @@ export async function verifyCode(request: Request, env: Env): Promise<Response> 
   // Each dependent write is guarded by this invocation's unique claim, including on a concurrent retry.
   const results = await env.DB.batch([
     env.DB.prepare(`UPDATE email_challenges SET claim=? WHERE ${active} AND digest=?
-      AND (EXISTS (SELECT 1 FROM accounts WHERE email=?) OR NOT EXISTS (SELECT 1 FROM accounts WHERE id=?))`)
-      .bind(claim, email, digest, email, id),
+      AND (EXISTS (SELECT 1 FROM accounts WHERE email=?) OR
+        (EXISTS (SELECT 1 FROM signup_applications WHERE email=? AND state='approved')
+         AND NOT EXISTS (SELECT 1 FROM accounts WHERE id=?)))`)
+      .bind(claim, email, digest, email, email, id),
     env.DB.prepare(`INSERT INTO accounts(id, display_name, kind, email)
-      SELECT ?, ?, 'human', ? WHERE ${claimed} AND NOT EXISTS (SELECT 1 FROM accounts WHERE email=?)`)
-      .bind(id, name, email, email, claim, email),
+      SELECT ?, ?, ?, ? WHERE ${claimed} AND NOT EXISTS (SELECT 1 FROM accounts WHERE email=?)`)
+      .bind(id, name, existing ? 'human' : kind, email, email, claim, email),
     env.DB.prepare(`INSERT INTO profiles(account_id) SELECT id FROM accounts WHERE email=? AND ${claimed}
       ON CONFLICT(account_id) DO NOTHING`).bind(email, email, claim),
     env.DB.prepare(`UPDATE accounts SET last_seen_at=datetime('now') WHERE email=? AND ${claimed}`).bind(email, email, claim),
     env.DB.prepare(`INSERT INTO sessions(token,account_id,expires_at) SELECT ?,id,? FROM accounts WHERE email=? AND ${claimed}`)
       .bind(claim, expires, email, email, claim),
+    env.DB.prepare(`UPDATE signup_applications SET state='joined', next_notice_at=NULL WHERE email=? AND state='approved' AND ${claimed}`).bind(email, email, claim),
     env.DB.prepare(`SELECT id, display_name, kind FROM accounts WHERE email=? AND ${claimed}`).bind(email, email, claim),
   ]);
-  const account = results[5].results[0];
+  const account = results[6].results[0];
   if (!account) {
     if (!existing && await env.DB.prepare(`SELECT 1 FROM email_challenges WHERE ${active} AND digest=?`).bind(email, digest).first()) {
-      return json({ error: 'id_taken', suggested_id: id }, 409);
+      const approved = await env.DB.prepare("SELECT 1 FROM signup_applications WHERE email=? AND state='approved'").bind(email).first();
+      return approved ? json({ error: 'id_taken', suggested_id: id }, 409) : json({ error: 'approval_required', request_access: '/join' }, 403);
     }
     return invalid();
   }
@@ -186,24 +197,16 @@ export async function registerAgent(request: Request, env: Env): Promise<Respons
     return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
   }
 
-  const body = await readBody(request);
-  if (!body) return json({ error: 'invalid_json' }, 400);
-  const displayName = typeof body.display_name === 'string' ? body.display_name.trim() : '';
-  if (!displayName || displayName.length > 100) return json({ error: 'display_name_required' }, 400);
-  if (body.id != null && typeof body.id !== 'string') return json({ error: 'invalid_id' }, 400);
-  const id = body.id?.trim() || generateId(displayName);
-  if (!/^[a-zA-Z0-9_-]+$/.test(id)) return json({ error: 'invalid_id' }, 400);
-
+  // Older clients know this route. Issue the first key only after approved agent signup.
+  const account = await authenticate(request, env);
+  if (!account || account.kind !== 'agent' || !account.email) {
+    return json({ error: 'verified_agent_session_required', join: '/join' }, 403);
+  }
   const apiKey = 'cgx_' + randomHex(24);
-  const digest = await digestToken(apiKey);
-  const [insert] = await env.DB.batch([
-    env.DB.prepare(`INSERT INTO accounts(id, display_name, kind, api_key) VALUES (?, ?, 'agent', ?)
-      ON CONFLICT(id) DO NOTHING`).bind(id, displayName, digest),
-    env.DB.prepare('INSERT INTO profiles(account_id) SELECT id FROM accounts WHERE id=? AND api_key=?')
-      .bind(id, digest),
-  ]);
-  if (!insert.meta.changes) return json({ error: 'id_taken' }, 409);
-  return json({ ok: true, account: { id, display_name: displayName, kind: 'agent' }, api_key: apiKey }, 201);
+  const result = await env.DB.prepare('UPDATE accounts SET api_key=? WHERE id=? AND api_key IS NULL')
+    .bind(await digestToken(apiKey), account.id).run();
+  if (!result.meta.changes) return json({ error: 'key_already_issued' }, 409);
+  return json({ ok: true, account: { id: account.id, display_name: account.display_name, kind: account.kind }, api_key: apiKey }, 201);
 }
 
 export async function getMe(request: Request, env: Env): Promise<Response> {

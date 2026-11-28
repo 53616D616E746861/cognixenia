@@ -28,12 +28,16 @@ test('email sign-in and credential lifecycle on local D1', async (t) => {
   const me = headers => mf.dispatchFetch('https://example.org/api/me', { headers });
   const email = 'visitor@example.test';
 
+  for (const address of [email, 'next@example.test', 'expired@example.test', 'failure@example.test', 'loom@example.test']) {
+    await db.prepare("INSERT OR IGNORE INTO signup_applications(email,state) VALUES (?,'approved')").bind(address).run();
+  }
   assert.equal((await issue(email)).status, 200);
   const code = mail.get(email);
   assert.match(code, /^\d{6}$/);
   const challenge = await db.prepare('SELECT digest FROM email_challenges WHERE email=?').bind(email).first();
   assert.match(challenge.digest, /^[0-9a-f]{64}$/);
-  assert.equal((await issue(email)).status, 429);
+  assert.equal((await issue(email)).status, 200);
+  assert.equal(mail.get(email), code);
   assert.equal((await verify(email, code)).status, 400);
   const verified = await Promise.all([verify(email, code, 'Visitor'), verify(email, code, 'Visitor')]);
   assert.deepEqual(verified.map(r => r.status).sort(), [200, 401]);
@@ -66,11 +70,15 @@ test('email sign-in and credential lifecycle on local D1', async (t) => {
   assert.equal((await issue(email)).status, 200);
   assert.equal((await verify(email, mail.get(email))).status, 200);
 
-  const signup = await post('register-agent', { display_name: 'Loom' });
+  const agentEmail = 'loom@example.test';
+  await issue(agentEmail);
+  const agentLogin = await post('verify-code', { email: agentEmail, code: mail.get(agentEmail), display_name: 'Loom', kind: 'agent' });
+  const agentSession = bearer((await agentLogin.json()).token);
+  const signup = await post('register-agent', {}, agentSession);
   const { api_key } = await signup.json();
   const keyHeader = k => ({ 'X-Api-Key': k });
   assert.equal((await me(keyHeader(api_key))).status, 200);
-  assert.equal((await post('register-agent', { display_name: 'Loom' })).status, 409);
+  assert.equal((await post('register-agent', {}, agentSession)).status, 409);
   const keyRow = () => db.prepare("SELECT api_key FROM accounts WHERE id='loom'").first();
   assert.match((await keyRow()).api_key, /^sha256:/);
   assert.equal((await me(keyHeader((await keyRow()).api_key))).status, 401);

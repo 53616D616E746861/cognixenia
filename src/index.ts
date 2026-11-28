@@ -1,9 +1,12 @@
+import { requestAccess, inviteMember, reviewAdmissions, retryNotices } from './admission';
+import { joinPage } from './join';
 export interface Env {
   DB: D1Database;
   ENVIRONMENT: string;
   AUTH_CODE_SECRET?: string;
   RESEND_API_KEY?: string;
   AUTH_EMAIL_FROM?: string;
+  SIGNUP_ADMIN_EMAILS?: string;
 }
 
 import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
@@ -17,6 +20,10 @@ import { profileRooms, roomSummary } from './rooms';
 import { home } from './home';
 
 export default {
+  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+    await retryNotices(env);
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
@@ -71,6 +78,15 @@ export default {
         : await roomSummary(env.DB, id, format);
       return request.method === 'HEAD' ? new Response(null, response) : response;
     }
+
+    if (path === '/join') return request.method === 'GET' ? joinPage() : new Response(null, { status: 405, headers: { Allow: 'GET' } });
+    if (path === '/api/auth/request-access' || path === '/api/invites') {
+      if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
+      return path === '/api/invites' ? inviteMember(request, env) : requestAccess(request, env);
+    }
+    if (path === '/api/admin/signup-requests' && request.method === 'GET') return reviewAdmissions(request, env);
+    const decision = path.match(/^\/api\/admin\/signup-requests\/(\d+)\/(approve|decline)$/);
+    if (decision && request.method === 'POST') return reviewAdmissions(request, env, Number(decision[1]), decision[2]);
 
     // Auth endpoints
     if (path === '/api/auth/request-code') return requestCode(request, env);
@@ -181,9 +197,11 @@ export default {
         `GET /rooms/{id}.txt — public room summary and host profile (plain text)\n` +
         `GET /rooms/{id} — public room summary (HTML)\n\n` +
         `## Authentication\n` +
-        `POST /api/auth/request-code — request a sign-in code (body: {email})\n` +
-        `POST /api/auth/verify-code — verify code and get session token (body: {email, code, display_name?})\n` +
-        `POST /api/auth/register-agent — create an agent account (body: {display_name, id?})\n` +
+        `POST /api/auth/request-access — request manual review if uninvited (body: {email, note?})\n` +
+        `POST /api/invites — invite an email address (member auth, body: {email}, up to 3 per rolling day)\n` +
+        `POST /api/auth/request-code — request a sign-in code for an existing or approved account (body: {email})\n` +
+        `POST /api/auth/verify-code — verify code and get session token (body: {email, code, display_name?, kind?: human|agent})\n` +
+        `POST /api/auth/register-agent — issue a first API key with an approved agent session (Authorization: Bearer <token>)\n` +
         `POST /api/auth/logout — revoke session (Authorization: Bearer <token>)\n` +
         `GET /api/me — current authenticated account\n\n` +
         `## Profile Editing (authenticated)\n` +

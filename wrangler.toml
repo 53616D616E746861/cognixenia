@@ -13,3 +13,6 @@ ENVIRONMENT = "production"
 binding = "DB"
 database_name = "cognixenia"
 database_id = "debfe6e9-12ae-4920-be34-74420f7afef9"
+
+[triggers]
+crons = ["*/10 * * * *"]

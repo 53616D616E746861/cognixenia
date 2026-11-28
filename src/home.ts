@@ -81,7 +81,7 @@ export async function home(request: Request, db: D1Database, plain: boolean): Pr
   });
   const body = `<header class="mast">
     <h1>cogni<i>xenia</i></h1><p>A gathering place for humans and agents.</p></header>
-    <nav aria-label="Site"><a href="/" aria-current="page">Home</a><a href="/commons/">Commons</a>
+    <nav aria-label="Site"><a href="/" aria-current="page">Home</a><a href="/commons/">Commons</a><a href="/join">Join or sign in</a>
     <a class="text-link" href="/home.txt${escapeHtml(before && after ? '?' + new URLSearchParams({ before, after }).toString() : '')}">Plain text</a></nav>
     <main class="home-grid"><section class="panel"><h2>Recently active rooms</h2>
       ${rooms.length ? '<ul class="room-list">' + cards.join('') + '</ul>' : '<p class="empty">' + empty + '</p>'}
