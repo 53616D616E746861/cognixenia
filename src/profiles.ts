@@ -16,15 +16,15 @@ interface Profile {
   accent_color: string | null;
   background_color: string | null;
   background_image_url: string | null;
-  custom_html: string | null;
+  has_artwork: number;
 }
 
-export async function profilePage(accountId: string, env: Env): Promise<Response> {
+export async function profilePage(accountId: string, env: Env, pageUrl: string): Promise<Response> {
   const row = await env.DB.prepare(`
     SELECT a.id as account_id, a.display_name, a.kind,
            p.summary, p.avatar_url, p.labels, p.links,
            p.standing_negatives, p.accent_color, p.background_color,
-           p.background_image_url, p.custom_html
+           p.background_image_url, length(p.custom_html) > 0 AS has_artwork
     FROM accounts a
     LEFT JOIN profiles p ON a.id = p.account_id
     WHERE a.id = ?
@@ -36,9 +36,14 @@ export async function profilePage(accountId: string, env: Env): Promise<Response
 
   await recordExternalRead(env, accountId);
 
-  const body = renderProfile(row);
+  const body = renderProfile(row, pageUrl);
   return new Response(htmlPage(`${row.display_name} — Cognixenia`, body, 'profile'), {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; frame-src 'self'; base-uri 'none'; form-action 'none'",
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
+    },
   });
 }
 
@@ -129,16 +134,30 @@ export async function profileText(accountId: string, env: Env): Promise<Response
   });
 }
 
-function renderProfile(p: Profile): string {
-  const accent = p.accent_color || 'var(--accent)';
+// Resolve against the public site so relative profile links keep working.
+function safeUrl(value: unknown, pageUrl: string, image = false): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  if (image && /^data:image\/(?:png|jpeg|gif|webp|avif);base64,[a-z0-9+/=]+$/i.test(value)) return value;
+  try {
+    const url = new URL(value, pageUrl);
+    if (url.username || url.password) return null;
+    if (url.protocol === 'https:' || (!image && ['http:', 'mailto:'].includes(url.protocol))) return url.href;
+  } catch { /* Omit malformed URLs from the public page. */ }
+  return null;
+}
+
+function hexColor(value: string | null): string | null {
+  return value && /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : null;
+}
+
+function renderProfile(p: Profile, pageUrl: string): string {
+  const accent = hexColor(p.accent_color) || 'var(--accent)';
   const labels: string[] = p.labels ? JSON.parse(p.labels) : [];
   const links: { title: string; url: string }[] = p.links ? JSON.parse(p.links) : [];
 
-  const bgStyle = p.background_image_url
-    ? `background-image: url('${escapeAttr(p.background_image_url)}'); background-size: cover; background-position: center;`
-    : p.background_color
-    ? `background-color: ${escapeAttr(p.background_color)};`
-    : '';
+  const background = safeUrl(p.background_image_url, pageUrl, true);
+  const bgColor = hexColor(p.background_color);
+  const avatar = safeUrl(p.avatar_url, pageUrl, true);
 
   const kindBadge = p.kind === 'agent'
     ? '<span class="kind-badge agent">Agent</span>'
@@ -147,8 +166,9 @@ function renderProfile(p: Profile): string {
   const parts: string[] = [];
 
   parts.push(`<style>
-    .profile-header { ${bgStyle} padding: 2rem 0; margin: -0.5rem 0 1.5rem 0; border-radius: 8px; }
-    .profile-identity { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .profile-header { position: relative; overflow: hidden; background-color: ${bgColor ?? 'transparent'}; padding: 2rem 0; margin: -0.5rem 0 1.5rem 0; border-radius: 8px; }
+    .profile-background { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .profile-identity { position: relative; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
     .profile-avatar {
       width: 80px; height: 80px; border-radius: 50%; object-fit: cover;
       border: 3px solid ${accent};
@@ -187,13 +207,14 @@ function renderProfile(p: Profile): string {
   </style>`);
 
   parts.push('<div class="profile-header">');
+  if (background) parts.push(`<img class="profile-background" src="${escapeAttr(background)}" alt="">`);
   parts.push('<div class="profile-identity">');
 
-  if (p.avatar_url) {
-    parts.push(`<img class="profile-avatar" src="${escapeAttr(p.avatar_url)}" alt="${escapeAttr(p.display_name)}">`);
+  if (avatar) {
+    parts.push(`<img class="profile-avatar" src="${escapeAttr(avatar)}" alt="${escapeAttr(p.display_name)}">`);
   } else {
     const initial = p.display_name.charAt(0).toUpperCase();
-    parts.push(`<div class="profile-avatar-placeholder">${initial}</div>`);
+    parts.push(`<div class="profile-avatar-placeholder">${escapeHtml(initial)}</div>`);
   }
 
   parts.push(`<div><span class="profile-name">${escapeHtml(p.display_name)}</span>${kindBadge}</div>`);
@@ -207,6 +228,7 @@ function renderProfile(p: Profile): string {
   if (labels.length) {
     parts.push('<div class="profile-labels">');
     for (const label of labels) {
+      if (typeof label !== 'string') continue;
       parts.push(`<span class="label">${escapeHtml(label)}</span>`);
     }
     parts.push('</div>');
@@ -219,25 +241,36 @@ function renderProfile(p: Profile): string {
   if (links.length) {
     parts.push('<ul class="profile-links">');
     for (const link of links) {
-      parts.push(`<li><a href="${escapeAttr(link.url)}">${escapeHtml(link.title)}</a></li>`);
+      const href = safeUrl(link?.url, pageUrl);
+      if (!href || typeof link.title !== 'string') continue;
+      parts.push(`<li><a href="${escapeAttr(href)}">${escapeHtml(link.title)}</a></li>`);
     }
     parts.push('</ul>');
   }
 
   parts.push(`<p><a href="/u/${encodeURIComponent(p.account_id)}/rooms">Visit rooms</a></p>`);
 
-  if (p.custom_html) {
-    const encoded = encodeCustomHtml(p.custom_html);
-    parts.push(`<iframe class="custom-html-frame" sandbox="allow-scripts" srcdoc="${escapeAttr(encoded)}" loading="lazy"></iframe>`);
+  if (p.has_artwork) {
+    parts.push(`<iframe class="custom-html-frame" title="Custom profile artwork" sandbox="" referrerpolicy="no-referrer" src="/u/${encodeURIComponent(p.account_id)}/artwork" loading="lazy"></iframe>`);
   }
 
   return parts.join('\n');
 }
 
-function encodeCustomHtml(html: string): string {
-  const maxSize = 256 * 1024;
-  const trimmed = html.length > maxSize ? html.slice(0, maxSize) : html;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:1rem;font-family:system-ui,sans-serif;color:#333}@media(prefers-color-scheme:dark){body{color:#ccc;background:#1a1a1a}}</style></head><body>${trimmed}</body></html>`;
+export async function profileArtwork(accountId: string, env: Env): Promise<Response> {
+  const row = await env.DB.prepare('SELECT custom_html FROM profiles WHERE account_id = ?')
+    .bind(accountId).first<{ custom_html: string | null }>();
+  if (!row?.custom_html) return new Response('No profile artwork', { status: 404 });
+
+  // HTTP policy also applies when a visitor opens the artwork URL directly.
+  return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:1rem;font-family:system-ui,sans-serif;color-scheme:light dark}</style>${row.custom_html}`, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  });
 }
 
 function escapeHtml(text: string): string {

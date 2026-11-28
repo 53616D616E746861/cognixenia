@@ -9,7 +9,7 @@ import { createRoom, updateRoom, addPin, removePin, listPins } from './room-mana
 import { inviteParticipant, acceptInvite, leaveRoom, removeParticipant, listParticipants, myAccess } from './room-access';
 import { proposeDialogue, acceptDialogue, postMessage, closeDialogue, listDialogues, getDialogue, getDialogueText } from './dialogues';
 import { commonsIndex, commonsEntry } from './commons';
-import { profilePage, profileJson, profileText } from './profiles';
+import { profilePage, profileJson, profileText, profileArtwork } from './profiles';
 import { profileRooms, roomSummary } from './rooms';
 import { home } from './home';
 
@@ -38,13 +38,15 @@ export default {
     }
 
     // Profile pages: /u/{id} and /u/{id}.txt
+    const artwork = path.match(/^\/u\/([a-zA-Z0-9_-]+)\/artwork$/);
+    if (artwork) return profileArtwork(artwork[1], env);
     const profileTxtMatch = path.match(/^\/u\/([a-zA-Z0-9_-]+)\.txt$/);
     if (profileTxtMatch) {
       return profileText(profileTxtMatch[1], env);
     }
     const profileMatch = path.match(/^\/u\/([a-zA-Z0-9_-]+)\/?$/);
     if (profileMatch) {
-      return profilePage(profileMatch[1], env);
+      return profilePage(profileMatch[1], env, request.url);
     }
 
     // API: profile JSON

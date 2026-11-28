@@ -43,7 +43,7 @@ export async function roomSummary(db: D1Database, id: string, format: 'html' | '
     <p style="white-space: pre-line">${escapeHtml(summary)}</p>
     <p><a href="${roomPath}.txt" type="text/plain">Plain text</a></p>
   </main>`;
-  return new Response(htmlPage(`${title} — Cognixenia`, body, 'room'), {
+  return new Response(htmlPage(`${room.title} — Cognixenia`, body, 'room'), {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
 }
@@ -95,7 +95,7 @@ export async function profileRooms(
     next ? `<p><a rel="next" href="${next}">Next page</a></p>` : '',
     `<p><a href="/u/${encodeURIComponent(ownerId)}">Host profile</a></p></main>`,
   ].join('\n');
-  return new Response(htmlPage(escapeHtml(title), body, 'rooms'), {
+  return new Response(htmlPage(title, body, 'rooms'), {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
 }
