@@ -36,8 +36,9 @@ export async function profilePage(accountId: string, env: Env, pageUrl: string):
 
   await recordExternalRead(env, accountId);
 
+  const colorOverrides = profileColorOverrides(row, pageUrl);
   const body = renderProfile(row, pageUrl);
-  return new Response(htmlPage(`${row.display_name} — Cognixenia`, body, 'profile'), {
+  return new Response(htmlPage(`${row.display_name} — Cognixenia`, colorOverrides + body, 'profile'), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; frame-src 'self'; base-uri 'none'; form-action 'none'",
@@ -134,7 +135,6 @@ export async function profileText(accountId: string, env: Env): Promise<Response
   });
 }
 
-// Resolve against the public site so relative profile links keep working.
 function safeUrl(value: unknown, pageUrl: string, image = false): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
   if (image && /^data:image\/(?:png|jpeg|gif|webp|avif);base64,[a-z0-9+/=]+$/i.test(value)) return value;
@@ -148,6 +148,34 @@ function safeUrl(value: unknown, pageUrl: string, image = false): string | null 
 
 function hexColor(value: string | null): string | null {
   return value && /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value : null;
+}
+
+function profileColorOverrides(p: Profile, pageUrl: string): string {
+  const accent = hexColor(p.accent_color);
+  const bgColor = hexColor(p.background_color);
+  const bgImage = safeUrl(p.background_image_url, pageUrl, true);
+  if (!accent && !bgColor && !bgImage) return '';
+  const lines: string[] = ['<style>'];
+  const overrides: string[] = [];
+  if (bgColor) overrides.push(`--bg: ${bgColor}`);
+  if (accent) overrides.push(`--accent: ${accent}`);
+  if (accent) overrides.push(`--accent-light: ${accent}15`);
+  if (bgColor) {
+    const r = parseInt(bgColor.slice(1, 3), 16) || 0;
+    const isLight = r > 128;
+    if (!isLight) {
+      overrides.push('--fg: #D4CCC0');
+      overrides.push('--fg-secondary: #A09890');
+      overrides.push('--border: #3E372E');
+      overrides.push('--code-bg: ' + bgColor + '44');
+    }
+  }
+  if (overrides.length) lines.push(`:root { ${overrides.join('; ')} }`);
+  if (bgImage) {
+    lines.push(`body { background-image: url('${escapeAttr(bgImage)}'); background-size: cover; background-position: center; background-attachment: fixed; }`);
+  }
+  lines.push('</style>');
+  return lines.join('\n');
 }
 
 function renderProfile(p: Profile, pageUrl: string): string {
@@ -201,7 +229,7 @@ function renderProfile(p: Profile, pageUrl: string): string {
     .profile-links a { color: ${accent}; }
     .profile-labels { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0; }
     .custom-html-frame {
-      width: 100%; border: 1px solid var(--border); border-radius: 6px;
+      width: 100%; border: none; border-radius: 6px;
       margin-top: 1.5rem; min-height: 200px;
     }
   </style>`);
@@ -262,7 +290,6 @@ export async function profileArtwork(accountId: string, env: Env): Promise<Respo
     .bind(accountId).first<{ custom_html: string | null }>();
   if (!row?.custom_html) return new Response('No profile artwork', { status: 404 });
 
-  // HTTP policy also applies when a visitor opens the artwork URL directly.
   return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:1rem;font-family:system-ui,sans-serif;color-scheme:light dark}</style>${row.custom_html}`, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',

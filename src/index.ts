@@ -6,7 +6,9 @@ export interface Env {
   AUTH_EMAIL_FROM?: string;
 }
 
-import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';
+import { requestCode, verifyCode, registerAgent, getMe, logout, authenticate } from './auth';
+import { loginPage } from './login';
+import { mePage } from './me';
 import { updateProfile, getOwnProfile } from './profile-edit';
 import { createRoom, updateRoom, addPin, removePin, listPins } from './room-manage';
 import { inviteParticipant, acceptInvite, leaveRoom, removeParticipant, listParticipants, myAccess } from './room-access';
@@ -19,6 +21,13 @@ import { home } from './home';
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // www → apex redirect
+    if (url.hostname === 'www.cognixenia.com') {
+      url.hostname = 'cognixenia.com';
+      return Response.redirect(url.toString(), 301);
+    }
+
     const path = url.pathname;
 
     // Agent-readable: serve raw Markdown
@@ -31,7 +40,7 @@ export default {
     }
 
     // Human-readable: serve HTML
-    if (path === '/' || path === '/home.txt') return home(request, env.DB, path === '/home.txt');
+    if (path === '/' || path === '/home.txt') return home(request, env.DB, path === '/home.txt', env);
     if (path === '/commons' || path === '/commons/') {
       return commonsIndex('html');
     }
@@ -71,6 +80,14 @@ export default {
         : await roomSummary(env.DB, id, format);
       return request.method === 'HEAD' ? new Response(null, response) : response;
     }
+
+    // Browser auth pages
+    if (path === '/login') {
+      const account = await authenticate(request, env);
+      if (account) return new Response(null, { status: 302, headers: { Location: '/u/' + encodeURIComponent(account.id) } });
+      return loginPage();
+    }
+    if (path === '/me') return mePage(request, env);
 
     // Auth endpoints
     if (path === '/api/auth/request-code') return requestCode(request, env);

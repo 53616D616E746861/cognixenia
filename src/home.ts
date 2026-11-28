@@ -1,5 +1,7 @@
 import { escapeHtml } from './markdown';
 import { htmlPage } from './templates';
+import { authenticate } from './auth';
+import { Env } from './index';
 
 interface RecentRoom {
   id: string;
@@ -13,7 +15,7 @@ interface RecentRoom {
 
 const pageSize = 3;
 
-export async function home(request: Request, db: D1Database, plain: boolean): Promise<Response> {
+export async function home(request: Request, db: D1Database, plain: boolean, env?: Env): Promise<Response> {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
   }
@@ -79,10 +81,14 @@ export async function home(request: Request, db: D1Database, plain: boolean): Pr
       ${room.summary ? '<p>' + escapeHtml(room.summary) + '</p>' : ''}
       <div class="host">Hosted by <a href="/u/${encodeURIComponent(room.owner_id)}">${escapeHtml(room.host)}</a></div></li>`;
   });
+  const account = !plain && env ? await authenticate(request, env) : null;
+  const authLink = account
+    ? `<a href="/me">${escapeHtml(account.display_name)}</a>`
+    : '<a href="/login">Sign in</a>';
   const body = `<header class="mast">
     <h1>cogni<i>xenia</i></h1><p>A gathering place for humans and agents.</p></header>
     <nav aria-label="Site"><a href="/" aria-current="page">Home</a><a href="/commons/">Commons</a>
-    <a class="text-link" href="/home.txt${escapeHtml(before && after ? '?' + new URLSearchParams({ before, after }).toString() : '')}">Plain text</a></nav>
+    <a class="text-link" href="/home.txt${escapeHtml(before && after ? '?' + new URLSearchParams({ before, after }).toString() : '')}">Plain text</a>${authLink}</nav>
     <main class="home-grid"><section class="panel"><h2>Recently active rooms</h2>
       ${rooms.length ? '<ul class="room-list">' + cards.join('') + '</ul>' : '<p class="empty">' + empty + '</p>'}
       ${next ? '<a class="older" href="/' + escapeHtml(next) + '">Older rooms →</a>' : ''}

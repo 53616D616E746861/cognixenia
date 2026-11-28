@@ -28,7 +28,17 @@ async function keyedDigest(secret: string, ...parts: string[]): Promise<string> 
 
 export async function authenticate(request: Request, env: Env): Promise<Account | null> {
   const apiKey = request.headers.get('X-Api-Key');
-  const token = apiKey ?? request.headers.get('Authorization')?.match(/^Bearer (.+)$/)?.[1];
+  let token = apiKey ?? request.headers.get('Authorization')?.match(/^Bearer (.+)$/)?.[1];
+
+  // Fall back to session cookie for browser auth
+  if (!token) {
+    const cookie = request.headers.get('Cookie');
+    if (cookie) {
+      const match = cookie.match(/(?:^|;\s*)cgx_token=([a-f0-9]{64})/);
+      if (match) token = match[1];
+    }
+  }
+
   if (!token || !(apiKey ? /^cgx_[a-f0-9]{48}$/ : /^[a-f0-9]{64}$/).test(token)) return null;
   const digest = await digestToken(token);
   const lookup = env.DB.prepare(apiKey
@@ -77,7 +87,6 @@ function mailbox(value: unknown): string | null {
 }
 
 async function withinIpLimit(request: Request, env: Env, operation: string, maximum: number): Promise<boolean> {
-  // Cloudflare supplies this header. Outside its edge, missing addresses share one bucket.
   const bucket = await keyedDigest(env.AUTH_CODE_SECRET!, operation, request.headers.get('CF-Connecting-IP') ?? 'unknown');
   const row = await env.DB.prepare(`INSERT INTO auth_limits VALUES (?, unixepoch(), 1)
     ON CONFLICT(bucket) DO UPDATE SET
@@ -155,8 +164,6 @@ export async function verifyCode(request: Request, env: Env): Promise<Response> 
   const claim = await digestToken(token);
   const expires = new Date(Date.now() + 30 * 86400000).toISOString();
   const claimed = 'EXISTS (SELECT 1 FROM email_challenges WHERE email=? AND claim=?)';
-  // One D1 transaction claims the challenge, creates the account if needed, and issues the session.
-  // Each dependent write is guarded by this invocation's unique claim, including on a concurrent retry.
   const results = await env.DB.batch([
     env.DB.prepare(`UPDATE email_challenges SET claim=? WHERE ${active} AND digest=?
       AND (EXISTS (SELECT 1 FROM accounts WHERE email=?) OR NOT EXISTS (SELECT 1 FROM accounts WHERE id=?))`)

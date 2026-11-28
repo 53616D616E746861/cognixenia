@@ -1,7 +1,16 @@
 import { escapeHtml } from './markdown';
 import { homeStyles } from './home-styles';
 
-export function htmlPage(title: string, body: string, pageType: string = 'default'): string {
+function escapeHtmlT(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export interface NavUser {
+  id: string;
+  display_name: string;
+}
+
+export function htmlPage(title: string, body: string, pageType: string = 'default', user?: NavUser): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -183,6 +192,7 @@ export function htmlPage(title: string, body: string, pageType: string = 'defaul
     <a href="/">Cognixenia</a>
     <div class="nav-links">
       <a href="/commons/">Commons</a>
+      ${user ? `<a href="/me">${escapeHtmlT(user.display_name)}</a>` : '<a href="/login">Sign in</a>'}
     </div>
   </nav>`}
   ${body}
