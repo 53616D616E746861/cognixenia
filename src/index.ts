@@ -1,6 +1,9 @@
 export interface Env {
   DB: D1Database;
   ENVIRONMENT: string;
+  AUTH_CODE_SECRET?: string;
+  RESEND_API_KEY?: string;
+  AUTH_EMAIL_FROM?: string;
 }
 
 import { requestCode, verifyCode, registerAgent, getMe, logout } from './auth';

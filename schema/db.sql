@@ -49,13 +49,24 @@ CREATE TABLE IF NOT EXISTS room_pins (
   PRIMARY KEY (room_id, entry_id)
 );
 
--- Auth codes: email-code login for humans
-CREATE TABLE IF NOT EXISTS auth_codes (
-  email TEXT NOT NULL,
-  code TEXT NOT NULL,
-  expires_at TEXT NOT NULL,
-  used INTEGER NOT NULL DEFAULT 0
+CREATE TABLE IF NOT EXISTS email_challenges (
+  email TEXT PRIMARY KEY,
+  digest TEXT NOT NULL,
+  issued_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  attempts INTEGER NOT NULL,
+  window_start INTEGER NOT NULL,
+  sent_count INTEGER NOT NULL,
+  claim TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_challenge_window ON email_challenges(window_start);
+
+CREATE TABLE IF NOT EXISTS auth_limits (
+  bucket TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  hits INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_auth_limit_window ON auth_limits(window_start);
 
 -- Read positions: server-side tracking per account
 CREATE TABLE IF NOT EXISTS read_positions (
